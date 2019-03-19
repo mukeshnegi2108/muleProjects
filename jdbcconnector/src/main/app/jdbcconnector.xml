@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:spring="http://www.springframework.org/schema/beans" 
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
     <http:listener-config name="HTTP_Listener_Configuration" host="localhost" port="8081" doc:name="HTTP Listener Configuration"/>
     <db:generic-config name="Generic_Database_Configuration" url="jdbc:sqlite:test.db" driverClassName="org.sqlite.JDBC" doc:name="Generic Database Configuration"/>
     <flow name="jdbcconnectorFlow">
@@ -15,8 +16,21 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
         <set-session-variable variableName="age" value="#[message.inboundProperties.'http.query.params'.age]" doc:name="Session Variable"/>
         <logger message="#[sessionVars.name],#[sessionVars.age]" level="INFO" doc:name="Logger"/>
         <db:insert config-ref="Generic_Database_Configuration" doc:name="Database">
-            <db:parameterized-query><![CDATA[insert into test_db ("name","age")
+            <db:parameterized-query><![CDATA[insert into test_exception ("name","age")
 values (#[sessionVars.name],#[sessionVars.age])]]></db:parameterized-query>
         </db:insert>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <choice-exception-strategy doc:name="Choice Exception Strategy">
+            <catch-exception-strategy doc:name="Catch Exception Strategy" when="#[exception.causeMatches('org.sqlite.SQLiteException.*')]">
+                <logger level="INFO" doc:name="Logger"/>
+                <db:select config-ref="Generic_Database_Configuration" doc:name="Database">
+                    <db:parameterized-query><![CDATA[select * from test_db;]]></db:parameterized-query>
+                </db:select>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+            </catch-exception-strategy>
+            <catch-exception-strategy doc:name="Catch Exception Strategy">
+                <set-payload value="#[wrong]" doc:name="Set Payload"/>
+            </catch-exception-strategy>
+        </choice-exception-strategy>
     </flow>
 </mule>
